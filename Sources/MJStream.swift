@@ -12,9 +12,9 @@ import UIKit
 #endif
 
 #if os(macOS)
-public typealias Image = NSImage
+public typealias MJImage = NSImage
 #else
-public typealias Image = UIImage
+public typealias MJImage = UIImage
 #endif
 
 extension MJStream {
@@ -51,7 +51,7 @@ public class MJStream: NSObject {
         }
     }
     
-    public var frameHandler: ((Image) -> Void)?
+    public var frameHandler: ((MJImage) -> Void)?
     
     public override init() {
         super.init()
@@ -99,7 +99,7 @@ extension MJStream: URLSessionDataDelegate {
             state = .playing
         }
         
-        if let handler = frameHandler, let image = Image(data: receivedData) {
+        if let handler = frameHandler, let image = MJImage(data: receivedData) {
             handler(image)
         }
         
