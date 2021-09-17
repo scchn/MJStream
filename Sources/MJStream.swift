@@ -32,6 +32,7 @@ public class MJStream: NSObject {
     private var session: URLSession!
     private var dataTask: URLSessionDataTask?
     private var receivedData = Data()
+    private var playCompletionHandler: ((Bool) -> Void)?
     
     private(set)
     public var url: URL?
@@ -59,22 +60,31 @@ public class MJStream: NSObject {
         self.session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
     }
     
-    public func play(url: URL, timeoutInterval: TimeInterval = 60) {
+    public func play(url videoURL: URL, timeoutInterval: TimeInterval = 60, _ completionHandler: @escaping (Bool) -> Void) {
         if state != .stopped {
             stop()
         }
         
-        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: timeoutInterval)
+        let request = URLRequest(url: videoURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: timeoutInterval)
         let task = session.dataTask(with: request)
         
         task.resume()
         
-        self.url = url
         state = .loading
         dataTask = task
+        url = videoURL
+        playCompletionHandler = completionHandler
     }
     
     private func cleanup() {
+        let isConnectionFailed = state == .loading
+        
+        defer {
+            if isConnectionFailed {
+                playCompletionHandler?(false)
+                playCompletionHandler = nil
+            }
+        }
         dataTask?.cancel()
         dataTask = nil
         receivedData.removeAll()
@@ -97,6 +107,8 @@ extension MJStream: URLSessionDataDelegate {
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         if state != .playing {
             state = .playing
+            playCompletionHandler?(true)
+            playCompletionHandler = nil
         }
         
         if let handler = frameHandler, let image = MJImage(data: receivedData) {
@@ -109,6 +121,7 @@ extension MJStream: URLSessionDataDelegate {
     }
     
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        // 斷線（非手動）
         if task == dataTask {
             cleanup()
         }
