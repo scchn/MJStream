@@ -1,8 +1,8 @@
 //
 //  ViewController.swift
-//  Demo-macOS
+//  macOS
 //
-//  Created by scchn on 2021/9/16.
+//  Created by scchn on 2021/9/17.
 //
 
 import Cocoa
@@ -56,11 +56,12 @@ class ViewController: NSViewController {
     @IBAction func play(_ sender: Any) {
         switch stream.state {
         case .stopped:
-            stream.play(url: videoURL, timeoutInterval: 3)
+            stream.play(url: videoURL, timeoutInterval: 3) { success in
+                print(success)
+            }
         case .loading, .playing:
             stream.stop()
         }
     }
 
 }
-
