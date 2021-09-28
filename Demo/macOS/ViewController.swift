@@ -15,7 +15,7 @@ class ViewController: NSViewController {
     @IBOutlet weak var previewView: NSView!
     @IBOutlet weak var progressIndicator: NSProgressIndicator!
 
-    private let stream = MJStream()
+    private let stream = MJStream(timeoutInterval: 3)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,8 +24,12 @@ class ViewController: NSViewController {
         previewView.layer?.backgroundColor = NSColor.lightGray.cgColor
         previewView.layer?.contentsGravity = .resizeAspect
         
-        stream.frameHandler = { [weak self] image in
+        stream.imageReceiveHandler = { [weak self] image in
             self?.updatePreviewView(image: image)
+        }
+        
+        stream.disconnectionHandler = {
+            print("Bye")
         }
         
         stream.stateUpdateHandler = { [weak self] state in
@@ -56,9 +60,10 @@ class ViewController: NSViewController {
     @IBAction func play(_ sender: Any) {
         switch stream.state {
         case .stopped:
-            stream.play(url: videoURL, timeoutInterval: 3) { success in
-                print(success)
+            stream.play(videoURL: videoURL) { ok in
+                print(ok ? "Connected" : "Connection Failed")
             }
+            
         case .loading, .playing:
             stream.stop()
         }

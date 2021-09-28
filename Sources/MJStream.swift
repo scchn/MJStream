@@ -34,8 +34,10 @@ public class MJStream: NSObject {
     private var receivedData = Data()
     private var playCompletionHandler: ((Bool) -> Void)?
     
+    public let timeoutInterval: TimeInterval
+    
     private(set)
-    public var url: URL?
+    public var videoURL: URL?
     
     @objc dynamic private(set)
     public var state: State = .stopped {
@@ -46,53 +48,68 @@ public class MJStream: NSObject {
     }
     
     public var stateUpdateHandler: ((State) -> Void)? {
-        didSet {
-            guard let handler = stateUpdateHandler else { return }
-            handler(state)
-        }
+        didSet { stateUpdateHandler?(state) }
     }
+    public var imageReceiveHandler: ((MJImage) -> Void)?
+    public var disconnectionHandler: (() -> Void)?
     
-    public var frameHandler: ((MJImage) -> Void)?
-    
-    public override init() {
+    public init(timeoutInterval: TimeInterval = 60) {
+        self.timeoutInterval = timeoutInterval
+        
         super.init()
         
         self.session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
     }
     
-    public func play(url videoURL: URL, timeoutInterval: TimeInterval = 60, _ completionHandler: @escaping (Bool) -> Void) {
+    // MARK: - Play
+    
+    public func play(videoURL url: URL, _ completionHandler: ((Bool) -> Void)? = nil) {
         if state != .stopped {
             stop()
         }
         
-        let request = URLRequest(url: videoURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: timeoutInterval)
+        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: timeoutInterval)
         let task = session.dataTask(with: request)
         
         task.resume()
         
-        state = .loading
         dataTask = task
-        url = videoURL
+        receivedData.removeAll()
         playCompletionHandler = completionHandler
+        videoURL = url
+        state = .loading
     }
     
-    private func cleanup() {
-        let isConnectionFailed = state == .loading
-        
-        defer {
-            if isConnectionFailed {
-                playCompletionHandler?(false)
-                playCompletionHandler = nil
-            }
+    public func play(_ completionHandler: ((Bool) -> Void)? = nil) {
+        guard let videoURL = videoURL else {
+            completionHandler?(false)
+            return
         }
+        
+        play(videoURL: videoURL, completionHandler)
+    }
+    
+    // MARK: - Stop
+    
+    private func cleanup() {
+        let failed = state == .loading
+        
         dataTask?.cancel()
         dataTask = nil
         receivedData.removeAll()
         state = .stopped
+        
+        if failed, let handler = playCompletionHandler {
+            handler(false)
+            playCompletionHandler = nil
+        }
     }
     
     public func stop() {
-        guard state != .stopped else { return }
+        guard state != .stopped else {
+            return
+        }
+        
         cleanup()
     }
     
@@ -111,7 +128,7 @@ extension MJStream: URLSessionDataDelegate {
             playCompletionHandler = nil
         }
         
-        if let handler = frameHandler, let image = MJImage(data: receivedData) {
+        if let handler = imageReceiveHandler, let image = MJImage(data: receivedData) {
             handler(image)
         }
         
@@ -121,9 +138,9 @@ extension MJStream: URLSessionDataDelegate {
     }
     
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        // 斷線（非手動）
         if task == dataTask {
             cleanup()
+            disconnectionHandler?()
         }
     }
     
